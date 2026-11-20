@@ -1,9 +1,14 @@
+import "dart:async";
+
+import "package:decimal/decimal.dart";
+import "package:flow/data/amount_trend.dart";
 import "package:flow/data/money.dart";
 import "package:flow/entity/account.dart";
 import "package:flow/l10n/extensions.dart";
 import "package:flow/objectbox.dart";
 import "package:flow/objectbox/actions.dart";
-import "package:flow/reports/report.dart";
+import "package:flow/objectbox/objectbox.g.dart";
+import "package:flow/services/amount_trends.dart";
 import "package:flow/theme/theme.dart";
 import "package:flow/utils/extensions.dart";
 import "package:flow/utils/primary_currency_dependent_state.dart";
@@ -15,7 +20,7 @@ import "package:flow/widgets/stats/missing_rates_notice.dart";
 import "package:flow/widgets/stats/money_delta_label.dart";
 import "package:flow/widgets/stats/net_worth/account_balance_share.dart";
 import "package:flow/widgets/stats/net_worth/account_share_tile.dart";
-import "package:flow/widgets/stats/net_worth/net_worth_chart.dart";
+import "package:flow/widgets/stats/amount_trend_chart.dart";
 import "package:flow/widgets/stats/net_worth/net_worth_sample.dart";
 import "package:flow/widgets/stats/stats_app_bar.dart";
 import "package:flow/widgets/time_range_selector.dart";
@@ -24,11 +29,8 @@ import "package:moment_dart/moment_dart.dart";
 
 /// Net worth over time.
 ///
-/// Samples [Account.balanceAt] at regular intervals across the selected
-/// [TimeRange], converting non-primary currency balances into the primary
-/// currency. The sampling interval (day / week / month / year) follows the
-/// range via [RangeData.getOptimalUnit], mirroring how [IntervalFlowReport]
-/// walks a range, so axis labels and tooltips stay distinct and meaningful.
+/// Reconstructs month-end balances from account ledgers. The unfinished month
+/// ends at now; currency conversion uses the currently available exchange rates.
 ///
 /// Below the trend, each account's current balance is shown as a share of net
 /// worth so the composition is informative no matter how many account types a
@@ -42,7 +44,11 @@ class NetWorthPage extends StatefulWidget {
 
 class _NetWorthPageState extends State<NetWorthPage>
     with PrimaryCurrencyDependentState<NetWorthPage> {
-  TimeRange range = TimeRange.thisYear();
+  TimeRange range = TimeRange.thisMonth();
+
+  bool get monthly =>
+      range.to.millisecondsSinceEpoch - range.from.millisecondsSinceEpoch >
+      const Duration(days: 62).inMilliseconds;
 
   bool busy = false;
 
@@ -55,22 +61,38 @@ class _NetWorthPageState extends State<NetWorthPage>
 
   /// Accounts left out of net worth via [Account.excludeFromTotalBalance].
   List<Account> excludedAccounts = [];
+  List<Account> historyAccounts = [];
+  Map<int, List<AmountTrendPoint>> histories = {};
+  List<AmountTrendPoint> exactSamples = [];
+  Decimal openingAmount = Decimal.zero;
+  int? selectedAccountId;
+  int generation = 0;
+  StreamSubscription<Query<Account>>? accountSubscription;
 
-  /// Unit the samples are spaced by, used to format axis labels and tooltips.
-  DurationUnit sampleUnit = DurationUnit.month;
+  @override
+  void initState() {
+    super.initState();
+    accountSubscription = ObjectBox().box<Account>().query().watch().listen(
+      (_) => fetch(),
+    );
+  }
+
+  @override
+  void dispose() {
+    generation++;
+    accountSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bool hasData = samples.length >= 2;
+    final bool hasData = samples.isNotEmpty;
 
     final Money current = Money(
       samples.isEmpty ? 0.0 : samples.last.amount,
       primaryCurrency,
     );
-    final Money first = Money(
-      samples.isEmpty ? 0.0 : samples.first.amount,
-      primaryCurrency,
-    );
+    final Money first = Money(openingAmount.toDouble(), primaryCurrency);
     final Money delta = current - first;
 
     return Scaffold(
@@ -119,13 +141,10 @@ class _NetWorthPageState extends State<NetWorthPage>
                     const SizedBox(height: 16.0),
                     if (hasData)
                       Frame(
-                        child: SizedBox(
-                          height: 220.0,
-                          child: NetWorthChart(
-                            samples: samples,
-                            unit: sampleUnit,
-                            primaryCurrency: primaryCurrency,
-                          ),
+                        child: AmountTrendChart(
+                          points: exactSamples,
+                          monthly: monthly,
+                          currency: primaryCurrency,
                         ),
                       )
                     else
@@ -149,6 +168,56 @@ class _NetWorthPageState extends State<NetWorthPage>
                       ),
                     ],
                     const SizedBox(height: 32.0),
+                    if (historyAccounts.isNotEmpty) ...[
+                      Frame(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "trend.monthlyAccounts".t(context),
+                              style: context.textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<int>(
+                              key: ValueKey(selectedAccountId),
+                              initialValue: selectedAccountId,
+                              isExpanded: true,
+                              items: historyAccounts
+                                  .map(
+                                    (account) => DropdownMenuItem(
+                                      value: account.id,
+                                      child: Text(
+                                        "${account.name} · ${account.currency}",
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (id) =>
+                                  setState(() => selectedAccountId = id),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "trend.monthEndHint".t(context),
+                              style: context.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 12),
+                            AmountTrendChart(
+                              key: ValueKey((selectedAccountId, range)),
+                              points: histories[selectedAccountId] ?? [],
+                              currency: historyAccounts
+                                  .firstWhere(
+                                    (account) =>
+                                        account.id == selectedAccountId,
+                                    orElse: () => historyAccounts.first,
+                                  )
+                                  .currency,
+                              monthly: monthly,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     ListHeader(
                       "tabs.stats.analytics.netWorth.byAccount".t(context),
                     ),
@@ -212,38 +281,84 @@ class _NetWorthPageState extends State<NetWorthPage>
   @override
   Future<void> fetch() async {
     if (!mounted) return;
+    final int request = ++generation;
     setState(() {
       busy = true;
     });
 
     try {
       final List<Account> allAccounts = ObjectBox().getAccounts(false);
-      accounts = allAccounts
+      final List<Account> included = allAccounts
           .where((account) => account.excludeFromTotalBalance != true)
           .toList();
-      excludedAccounts = allAccounts
+      final List<Account> excluded = allAccounts
           .where((account) => account.excludeFromTotalBalance == true)
           .toList();
 
-      final DurationUnit unit = RangeData.getOptimalUnit(range);
-      final List<DateTime> anchors = _anchors(range, unit);
+      final DateTime historyFrom = range.from <= Moment.minValue
+          ? await firstSettledLedgerDate() ?? DateTime.now()
+          : range.from;
+      final List<DateTime> anchors = trendAnchors(
+        from: historyFrom,
+        to: range.to,
+        now: DateTime.now(),
+        monthly: monthly,
+      );
+      final List<DateTime> ledgerAnchors = anchors.isEmpty
+          ? []
+          : [historyFrom.subtract(const Duration(microseconds: 1)), ...anchors];
+      final List<List<AmountTrendPoint>> results = await Future.wait(
+        allAccounts.map((account) => loadAccountTrend(account, ledgerAnchors)),
+      );
+      if (!mounted || request != generation) return;
+      final Map<int, List<AmountTrendPoint>> nextHistories = {
+        for (int i = 0; i < allAccounts.length; i++)
+          allAccounts[i].id: results[i].isEmpty ? [] : results[i].sublist(1),
+      };
 
       bool missing = false;
+      Decimal nextOpening = Decimal.zero;
+      for (int i = 0; i < allAccounts.length; i++) {
+        final Account account = allAccounts[i];
+        if (account.excludeFromTotalBalance || results[i].isEmpty) continue;
+        final Decimal original = results[i].first.amount;
+        if (account.currency == primaryCurrency) {
+          nextOpening += original;
+        } else {
+          final double? converted = Money(
+            original.toDouble(),
+            account.currency,
+          ).tryConvertAmount(primaryCurrency, rates);
+          if (converted == null || !converted.isFinite) {
+            missing = true;
+          } else {
+            nextOpening += Decimal.parse(converted.toString());
+          }
+        }
+      }
 
-      final List<NetWorthSample> nextSamples = anchors.map((anchor) {
-        double total = 0.0;
-        for (final Account account in accounts) {
-          final double? value = account
-              .balanceAt(anchor)
-              .tryConvertAmount(primaryCurrency, rates);
-          total += value ?? 0.0;
+      final List<AmountTrendPoint> nextExact = anchors.asMap().entries.map((
+        entry,
+      ) {
+        Decimal total = Decimal.zero;
+        for (final Account account in included) {
+          final Decimal original = nextHistories[account.id]![entry.key].amount;
+          final double? value = Money(
+            original.toDouble(),
+            account.currency,
+          ).tryConvertAmount(primaryCurrency, rates);
+          if (account.currency == primaryCurrency) {
+            total += original;
+          } else if (value != null && value.isFinite) {
+            total += Decimal.parse(value.toString());
+          }
           missing = missing || value == null;
         }
-        return NetWorthSample(anchor, total);
+        return AmountTrendPoint(entry.value, total);
       }).toList();
 
       final List<AccountBalanceShare> nextShares = [];
-      for (final Account account in accounts) {
+      for (final Account account in included) {
         final double? value = account.balance.tryConvertAmount(
           primaryCurrency,
           rates,
@@ -255,44 +370,25 @@ class _NetWorthPageState extends State<NetWorthPage>
       }
       nextShares.sort((a, b) => b.amount.abs().compareTo(a.amount.abs()));
 
-      sampleUnit = unit;
-      samples = nextSamples;
+      accounts = included;
+      excludedAccounts = excluded;
+      historyAccounts = allAccounts;
+      histories = nextHistories;
+      if (!allAccounts.any((account) => account.id == selectedAccountId)) {
+        selectedAccountId = allAccounts.firstOrNull?.id;
+      }
+      exactSamples = nextExact;
+      openingAmount = nextOpening;
+      samples = nextExact
+          .map((point) => NetWorthSample(point.date, point.amount.toDouble()))
+          .toList();
       shares = nextShares;
       missingRates = missing;
     } finally {
-      busy = false;
-      if (mounted) setState(() {});
+      if (mounted && request == generation) {
+        busy = false;
+        setState(() {});
+      }
     }
-  }
-
-  /// Even anchors stepping through [range] by [unit], capped at a readable
-  /// count, with the final anchor pinned to "now" so the latest figure is
-  /// live (when the range includes the present).
-  List<DateTime> _anchors(TimeRange range, DurationUnit unit) {
-    final DateTime now = DateTime.now();
-    final DateTime start = range.from;
-    final DateTime end = range.to.isAfter(now) ? now : range.to;
-
-    if (!end.isAfter(start)) {
-      return [end];
-    }
-
-    final int stepMicros = unit.microseconds;
-    final int spanMicros = end.difference(start).inMicroseconds;
-
-    // Keep at most ~24 points; never fewer than one step.
-    final int rawCount = (spanMicros / stepMicros).floor();
-    final int count = rawCount.clamp(1, 24);
-    final double strideMicros = spanMicros / count;
-
-    final List<DateTime> anchors = [];
-    for (int i = 0; i < count; i++) {
-      anchors.add(
-        start.add(Duration(microseconds: (strideMicros * i).round())),
-      );
-    }
-    anchors.add(end);
-
-    return anchors;
   }
 }

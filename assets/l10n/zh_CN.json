@@ -1042,4 +1042,16 @@
   "transactions.query.noResult": "没有可显示的交易",
   "transactions.query.noResult.description": "尝试更新您的过滤条件",
   "visitGitHubRepo": "前往 GitHub 查看"
+,
+  "trend.noData": "此时间段暂无数据",
+  "trend.touchHint": "点击或拖动折线，查看完整金额",
+  "trend.previousPoint": "上一个数据点",
+  "trend.nextPoint": "下一个数据点",
+  "trend.accountBalance": "余额变化",
+  "trend.monthlyAccounts": "各账户每月余额",
+  "trend.monthEndHint": "本月按天显示余额；较长范围显示月末余额，当前日期截至现在。",
+  "trend.dayDetails": "{date} 的支出明细",
+  "trend.noSpending": "当天没有支出",
+  "trend.expense": "支出",
+  "trend.retry": "历史数据加载失败，点击重试"
 }

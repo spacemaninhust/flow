@@ -131,7 +131,7 @@ class _RangeDailyChartState extends State<RangeDailyChart> {
               final String amount = Money(
                 touchedSpot.y,
                 primaryCurrency,
-              ).formattedCompact;
+              ).formattedExact;
               return LineTooltipItem(amount, textStyle);
             }).toList();
           },

@@ -1,4 +1,5 @@
 import "package:flow/data/money.dart";
+import "package:flow/data/amount_trend.dart";
 import "package:flow/entity/account.dart";
 import "package:flow/l10n/extensions.dart";
 import "package:flow/objectbox.dart";
@@ -13,10 +14,10 @@ import "package:flow/widgets/stats/money_delta_label.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:material_symbols_icons_flow/symbols.dart";
+import "package:moment_dart/moment_dart.dart";
 
 /// Bento preview of net worth: the current total, its change over the sampled
-/// window, and a minimal sparkline. Range-independent — it always trails the
-/// last [_months] months regardless of the Stats range selector.
+/// window, and a minimal sparkline for the current month.
 class NetWorthTile extends StatefulWidget {
   const NetWorthTile({super.key});
 
@@ -26,12 +27,11 @@ class NetWorthTile extends StatefulWidget {
 
 class _NetWorthTileState extends State<NetWorthTile>
     with PrimaryCurrencyDependentState<NetWorthTile> {
-  static const int _months = 6;
-
   bool busy = true;
   bool loaded = false;
 
   List<double> samples = [];
+  List<DateTime> sampleAnchors = [];
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +59,7 @@ class _NetWorthTileState extends State<NetWorthTile>
             delta: Money(currentAmount - firstAmount, primaryCurrency),
             suffixLabel: "tabs.stats.analytics.inRange".t(
               context,
-              "${_months}M",
+              TimeRange.thisMonth().format(),
             ),
             iconSize: 16.0,
             initiallyAbbreviated: true,
@@ -71,6 +71,8 @@ class _NetWorthTileState extends State<NetWorthTile>
                 ? NetWorthSparkline(
                     samples: samples,
                     color: context.colorScheme.primary,
+                    anchors: sampleAnchors,
+                    currency: primaryCurrency,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -87,7 +89,14 @@ class _NetWorthTileState extends State<NetWorthTile>
           .where((account) => account.excludeFromTotalBalance != true)
           .toList();
 
-      final List<DateTime> anchors = _monthAnchors(_months);
+      final DateTime now = DateTime.now();
+      final List<DateTime> anchors = trendAnchors(
+        from: DateTime(now.year, now.month),
+        to: now,
+        now: now,
+        monthly: false,
+      );
+      sampleAnchors = anchors;
 
       samples = anchors.map((anchor) {
         double total = 0.0;
@@ -105,22 +114,5 @@ class _NetWorthTileState extends State<NetWorthTile>
       busy = false;
       if (mounted) setState(() {});
     }
-  }
-
-  /// End-of-month anchors for the trailing [months] months, with the most
-  /// recent point anchored to "now" so the latest figure is live.
-  List<DateTime> _monthAnchors(int months) {
-    final DateTime now = DateTime.now();
-    final List<DateTime> anchors = [];
-
-    for (int i = months - 1; i >= 0; i--) {
-      if (i == 0) {
-        anchors.add(now);
-      } else {
-        anchors.add(DateTime(now.year, now.month - i + 1, 0, 23, 59, 59));
-      }
-    }
-
-    return anchors;
   }
 }

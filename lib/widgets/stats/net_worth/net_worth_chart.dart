@@ -85,7 +85,7 @@ class NetWorthChart extends StatelessWidget {
                 final NetWorthSample sample = samples[spot.x.toInt()];
                 return LineTooltipItem(
                   "${sample.anchor.toMoment().format(_tooltipFormat)}\n"
-                  "${Money(sample.amount, primaryCurrency).formattedCompact}",
+                  "${Money(sample.amount, primaryCurrency).formattedExact}",
                   TextStyle(
                     color: line,
                     fontWeight: FontWeight.bold,

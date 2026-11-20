@@ -1042,4 +1042,16 @@
   "transactions.query.noResult": "No transactions to show",
   "transactions.query.noResult.description": "Try updating the filters",
   "visitGitHubRepo": "Visit repo on GitHub"
+,
+  "trend.noData": "No data in this period",
+  "trend.touchHint": "Tap or drag the line to inspect the full amount",
+  "trend.previousPoint": "Previous point",
+  "trend.nextPoint": "Next point",
+  "trend.accountBalance": "Balance history",
+  "trend.monthlyAccounts": "Monthly account balances",
+  "trend.monthEndHint": "Daily balances for short ranges; month-end balances for longer ranges. Today is as of now.",
+  "trend.dayDetails": "Expenses on {date}",
+  "trend.noSpending": "No expenses on this day",
+  "trend.expense": "Expense",
+  "trend.retry": "Could not load history. Tap to retry."
 }

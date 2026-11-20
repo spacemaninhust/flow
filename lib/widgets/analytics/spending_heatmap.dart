@@ -16,6 +16,7 @@ class SpendingHeatmap extends StatelessWidget {
   final DateTime from;
   final DateTime to;
   final String currency;
+  final ValueChanged<DateTime>? onDaySelected;
 
   final double cellSize;
   final double gap;
@@ -26,6 +27,7 @@ class SpendingHeatmap extends StatelessWidget {
     required this.from,
     required this.to,
     required this.currency,
+    this.onDaySelected,
     this.cellSize = 15.0,
     this.gap = 4.0,
   });
@@ -82,6 +84,7 @@ class SpendingHeatmap extends StatelessWidget {
                                 from: from,
                                 to: to,
                                 currency: currency,
+                                onDaySelected: onDaySelected,
                                 cellSize: cellSize,
                                 gap: gap,
                               ),
@@ -151,6 +154,7 @@ class _WeekColumn extends StatelessWidget {
   final DateTime from;
   final DateTime to;
   final String currency;
+  final ValueChanged<DateTime>? onDaySelected;
   final double cellSize;
   final double gap;
 
@@ -161,6 +165,7 @@ class _WeekColumn extends StatelessWidget {
     required this.from,
     required this.to,
     required this.currency,
+    this.onDaySelected,
     required this.cellSize,
     required this.gap,
   });
@@ -183,21 +188,26 @@ class _WeekColumn extends StatelessWidget {
         final int level = _levelFor(value, thresholds);
         final String label =
             "${day.toMoment().format("dddd, MMM D")}: "
-            "${Money(value, currency).formatted}";
+            "${Money(value, currency).formattedExact}";
 
         return Padding(
           padding: EdgeInsets.only(bottom: gap),
           child: Tooltip(
             message: label,
+            triggerMode: TooltipTriggerMode.tap,
             child: Semantics(
               label: label,
-              button: false,
-              child: Container(
-                width: cellSize,
-                height: cellSize,
-                decoration: BoxDecoration(
-                  color: _levelColor(context, level),
-                  borderRadius: const BorderRadius.all(Radius.circular(3.0)),
+              button: onDaySelected != null,
+              child: GestureDetector(
+                key: ValueKey("spending-day-${day.toIso8601String()}"),
+                onTap: onDaySelected == null ? null : () => onDaySelected!(day),
+                child: Container(
+                  width: cellSize,
+                  height: cellSize,
+                  decoration: BoxDecoration(
+                    color: _levelColor(context, level),
+                    borderRadius: const BorderRadius.all(Radius.circular(3.0)),
+                  ),
                 ),
               ),
             ),

@@ -1,0 +1,43 @@
+{
+  "baseRelease": "0.26.0",
+  "baseCommit": "474bd2e54867f13a0a46020f1f51a2dfe76af760",
+  "branch": "feature/exact-trend-charts",
+  "previewDate": "2026-11-20",
+  "previewRenderer": "Actual Flutter routes in widget tests, 430 x 1100 logical pixels",
+  "previewData": "Isolated demo ObjectBox database; no user data",
+  "flutterVersion": "3.47.0",
+  "databaseEntitiesChanged": false,
+  "backupFormatChanged": false,
+  "dependencyLockChanged": false,
+  "passedTests": 447,
+  "apk": {
+    "file": "Flow-0.26.0-personal.2.apk",
+    "package": "mn.flow.flow.personal",
+    "version": "0.26.0-personal.2",
+    "versionCode": 366,
+    "releaseBuildSucceeded": true,
+    "signatureVerified": true,
+    "zipAlignmentVerified": true
+  },
+  "validation": [
+    "Decimal accumulation and two-decimal Money display with phone-width layout",
+    "Intermediate date ticks, including labels fitted inside chart edges",
+    "Current-month defaults on calendar, net worth and account detail routes",
+    "Heatmap taps open daily total and details, including zero-spending days",
+    "Month-end, leap-year and current-period anchors",
+    "Opening balances and out-of-range historical edits",
+    "Pending, deleted, future and other-account records excluded",
+    "Tap selection persists; privacy setting hides new amount labels",
+    "Daily details and account selection update correctly",
+    "All time is bounded to recorded history on all three routes",
+    "Existing v2 backup serialization roundtrip"
+  ],
+  "previewCommand": "flutter test --no-pub --dart-define=FLOW_PREVIEW=true --update-goldens test/preview/trend_pages_preview_test.dart",
+  "previewRequirements": "Windows, NotoSansSC-VF.ttf system font, ObjectBox 5.3.2 DLL on PATH",
+  "limitations": [
+    "APK built and verified; no Android device verification yet",
+    "The user's actual backup has not been imported",
+    "Cross-currency history uses available current rates, as in the base app",
+    "Existing double-based stored amounts retain their original precision limitations"
+  ]
+}

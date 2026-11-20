@@ -1042,4 +1042,16 @@
   "transactions.query.noResult": "هیچ تراکنشی برای نمایش نیست",
   "transactions.query.noResult.description": "فیلترها را به‌روزرسانی کنید",
   "visitGitHubRepo": "مشاهده ریپو در GitHub"
+,
+  "trend.noData": "No data in this period",
+  "trend.touchHint": "Tap or drag the line to inspect the full amount",
+  "trend.previousPoint": "Previous point",
+  "trend.nextPoint": "Next point",
+  "trend.accountBalance": "Balance history",
+  "trend.monthlyAccounts": "Monthly account balances",
+  "trend.monthEndHint": "Historical months: closing balance. Current month: as of now.",
+  "trend.dayDetails": "Expenses on {date}",
+  "trend.noSpending": "No expenses on this day",
+  "trend.expense": "Expense",
+  "trend.retry": "Could not load history. Tap to retry."
 }

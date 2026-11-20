@@ -1,3 +1,5 @@
+import "package:decimal/decimal.dart";
+import "package:flow/data/amount_trend.dart";
 import "package:flow/data/money.dart";
 import "package:flow/entity/transaction.dart";
 import "package:flow/l10n/extensions.dart";
@@ -17,7 +19,10 @@ import "package:flow/widgets/stats/missing_rates_notice.dart";
 import "package:flow/widgets/stats/stats_app_bar.dart";
 import "package:flow/widgets/stats/stats_empty_state.dart";
 import "package:flow/widgets/time_range_selector.dart";
+import "package:flow/widgets/stats/amount_trend_chart.dart";
+import "package:flow/widgets/stats/exact_amount_text.dart";
 import "package:flutter/material.dart";
+import "package:go_router/go_router.dart";
 import "package:material_symbols_icons_flow/symbols.dart";
 import "package:moment_dart/moment_dart.dart";
 
@@ -35,7 +40,7 @@ class SpendingCalendarPage extends StatefulWidget {
 
 class _SpendingCalendarPageState extends State<SpendingCalendarPage>
     with PrimaryCurrencyDependentState<SpendingCalendarPage> {
-  TimeRange range = TimeRange.thisYear();
+  TimeRange range = TimeRange.thisMonth();
 
   bool busy = false;
   bool missingRates = false;
@@ -45,6 +50,10 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
   double total = 0.0;
   DateTime from = DateTime.now();
   DateTime to = DateTime.now();
+  List<AmountTrendPoint> points = [];
+  List<Transaction> expenses = [];
+  DateTime? selectedDay;
+  int generation = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +100,19 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
                       ),
                     ),
                     const SizedBox(height: 16.0),
+                    Frame(
+                      child: AmountTrendChart(
+                        points: points,
+                        currency: primaryCurrency,
+                        onSelected: (point) =>
+                            setState(() => selectedDay = point.date),
+                      ),
+                    ),
+                    if (points.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _dayDetails(context),
+                      const SizedBox(height: 16),
+                    ],
                     if (hasData)
                       Frame(
                         child: SpendingHeatmap(
@@ -98,6 +120,7 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
                           from: from,
                           to: to,
                           currency: primaryCurrency,
+                          onDaySelected: _showHeatmapDay,
                         ),
                       )
                     else
@@ -126,6 +149,78 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
     );
   }
 
+  void _showHeatmapDay(DateTime day) {
+    setState(() => selectedDay = day);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .65,
+          child: SingleChildScrollView(child: _dayDetails(context, day)),
+        ),
+      ),
+    );
+  }
+
+  Widget _dayDetails(BuildContext context, [DateTime? date]) {
+    final DateTime day = date ?? selectedDay ?? points.last.date;
+    final List<Transaction> items = expenses
+        .where(
+          (transaction) =>
+              transaction.transactionDate.year == day.year &&
+              transaction.transactionDate.month == day.month &&
+              transaction.transactionDate.day == day.day,
+        )
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Frame(
+          child: ExactAmountText(
+            amount: points
+                .where((point) => DateUtils.isSameDay(point.date, day))
+                .first
+                .amount,
+            currency: primaryCurrency,
+            style: context.textTheme.headlineSmall,
+          ),
+        ),
+        Frame(
+          child: Text(
+            "trend.dayDetails".t(context, day.toMoment().format("YYYY-MM-DD")),
+            style: context.textTheme.titleMedium,
+          ),
+        ),
+        if (items.isEmpty) Frame(child: Text("trend.noSpending".t(context))),
+        ...items.map(
+          (transaction) => ListTile(
+            title: Text(
+              transaction.title?.isNotEmpty == true
+                  ? transaction.title!
+                  : "trend.expense".t(context),
+            ),
+            subtitle: Text(
+              transaction.transactionDate.toMoment().format("HH:mm"),
+            ),
+            trailing: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * .5,
+              ),
+              child: ExactAmountText(
+                amount: Decimal.parse(transaction.amount.abs().toString()),
+                currency: transaction.currency,
+                selectable: false,
+              ),
+            ),
+            onTap: () => context.push("/transaction/${transaction.id}"),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildWeekdayInsight(BuildContext context) {
     final int topWeekday = weekdayExpense.entries
         .reduce((a, b) => a.value >= b.value ? a : b)
@@ -149,12 +244,14 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
   void _updateRange(TimeRange value) {
     if (value == range) return;
     range = value;
+    selectedDay = null;
     fetch();
   }
 
   @override
   Future<void> fetch() async {
     if (!mounted) return;
+    final int request = ++generation;
     setState(() {
       busy = true;
     });
@@ -172,17 +269,24 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
           .transcationsByRange(range, includeTransfers: false);
 
       final Map<DateTime, double> daily = {};
+      final Map<DateTime, Decimal> exactDaily = {};
+      final List<Transaction> included = [];
       final Map<int, double> weekday = {};
       double sum = 0.0;
 
       for (final Transaction transaction in transactions) {
         if (transaction.type != TransactionType.expense) continue;
+        if (transaction.transactionSubtype ==
+                TransactionSubtype.updateBalance ||
+            transaction.transactionDate.isAfter(now)) {
+          continue;
+        }
 
         final double? converted = transaction.money.tryConvertAmount(
           primaryCurrency,
           rates,
         );
-        if (converted == null) {
+        if (converted == null || !converted.isFinite) {
           missing = true;
           continue;
         }
@@ -195,18 +299,37 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
         );
 
         daily[day] = (daily[day] ?? 0.0) + magnitude;
+        exactDaily[day] =
+            (exactDaily[day] ?? Decimal.zero) +
+            Decimal.parse(magnitude.toString());
+        included.add(transaction);
         weekday[transaction.transactionDate.weekday] =
             (weekday[transaction.transactionDate.weekday] ?? 0.0) + magnitude;
         sum += magnitude;
       }
 
+      if (!mounted || request != generation) return;
+      if (range.from <= Moment.minValue) {
+        from = included.isEmpty
+            ? now
+            : included
+                  .map((transaction) => transaction.transactionDate)
+                  .reduce((a, b) => a.isBefore(b) ? a : b);
+      }
+      points = dailySpendingTrend(
+        exactDaily,
+        trendAnchors(from: from, to: range.to, now: now, monthly: false),
+      );
+      expenses = included;
       dailyExpense = daily;
       weekdayExpense = weekday;
       total = sum;
       missingRates = missing;
     } finally {
-      busy = false;
-      if (mounted) setState(() {});
+      if (mounted && request == generation) {
+        busy = false;
+        setState(() {});
+      }
     }
   }
 

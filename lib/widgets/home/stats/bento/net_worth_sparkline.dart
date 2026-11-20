@@ -1,15 +1,21 @@
 import "package:fl_chart/fl_chart.dart";
+import "package:flow/data/money.dart";
+import "package:moment_dart/moment_dart.dart";
 import "package:flutter/material.dart";
 
 /// A minimal, axis-less net worth trend line for the bento net worth tile.
 class NetWorthSparkline extends StatelessWidget {
   final List<double> samples;
   final Color color;
+  final List<DateTime> anchors;
+  final String currency;
 
   const NetWorthSparkline({
     super.key,
     required this.samples,
     required this.color,
+    required this.anchors,
+    required this.currency,
   });
 
   @override
@@ -25,7 +31,23 @@ class NetWorthSparkline extends StatelessWidget {
         maxX: (samples.length - 1).toDouble(),
         minY: minY - pad,
         maxY: maxY + pad,
-        lineTouchData: const LineTouchData(enabled: false),
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            fitInsideHorizontally: true,
+            fitInsideVertically: true,
+            getTooltipItems: (spots) => spots
+                .map(
+                  (spot) => LineTooltipItem(
+                    "${anchors[spot.spotIndex].toMoment().format('YYYY-MM-DD')}\n"
+                    "${Money(samples[spot.spotIndex], currency).formattedExact}",
+                    TextStyle(
+                      color: Theme.of(context).colorScheme.onInverseSurface,
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
         titlesData: const FlTitlesData(show: false),
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),

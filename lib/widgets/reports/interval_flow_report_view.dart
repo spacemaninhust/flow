@@ -98,7 +98,7 @@ class IntervalFlowReportView extends StatelessWidget {
               final String amount = Money(
                 touchedSpot.y,
                 primaryCurrency,
-              ).formattedCompact;
+              ).formattedExact;
               return LineTooltipItem(amount, textStyle);
             }).toList();
           },

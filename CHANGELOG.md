@@ -1,5 +1,14 @@
 # Changelog
 
+## next
+
+* Added daily spending trends with point selection and daily transaction details.
+* Added month-end account history to net worth and live balance trends to accounts.
+* Chart inspection uses Money formatting with two decimal places and responsive labels.
+* Restored calendar axis ticks and defaulted trend ranges to the current month.
+* Spending heatmap cells open the selected day's total and transaction details.
+* Kept the 0.26.0 database entities and backup format unchanged.
+
 ## 0.26.0
 
 ### Features

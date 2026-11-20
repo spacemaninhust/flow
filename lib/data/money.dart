@@ -266,6 +266,9 @@ class Money {
   /// e.g., $1.2M
   String get formattedCompact => formatMoney(compact: true);
 
+  /// Chart values use the same money formatter as balances, fixed to cents.
+  String get formattedExact => formatMoney(decimalDigits: 2);
+
   /// Returns money-formatted string (in the default locale)
   ///
   /// e.g., 467,000
