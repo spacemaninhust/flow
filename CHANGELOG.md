@@ -2,6 +2,8 @@
 
 ## next
 
+* Show green remaining money and red overspend in redesigned category budget cards.
+
 * Redesigned the spending calendar with a prominent overview and grouped trend,
   daily detail, heatmap and weekday rhythm sections.
 

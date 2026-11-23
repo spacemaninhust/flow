@@ -428,7 +428,8 @@ void main() {
     );
     expect(find.text("已用：25.00%"), findsOneWidget);
     expect(find.text("上限：20.00%"), findsOneWidget);
-    expect(find.text("超过类别上限"), findsOneWidget);
+    expect(find.text("已超出"), findsOneWidget);
+    expect(find.text(Money(500, "CNY").formattedExact), findsOneWidget);
     expect(find.text("无花销类别"), findsNothing);
     expect(find.text(Money(2000, "CNY").formatted), findsOneWidget);
     await expectLater(
@@ -495,5 +496,67 @@ void main() {
       matchesGoldenFile("../../docs/previews/top-categories.png"),
     );
     await tester.pumpWidget(const SizedBox.shrink());
+  }, skip: !renderPreview);
+
+  testWidgets("category remaining and over-limit cards light and dark", (
+    tester,
+  ) async {
+    final transport = Category(
+      name: "交通",
+      iconCode: const IconFlowIcon(Symbols.train_rounded).toString(),
+    );
+    ObjectBox().box<Category>().put(transport);
+    final sampleBudget =
+        Budget(
+            name: "对比预算",
+            amount: 10000,
+            currency: "CNY",
+            range: TimeRange.thisMonth().toString(),
+          )
+          ..categoryLimits = {eatingOut.uuid: 20}
+          ..categoryAmountLimits = {transport.uuid: 800};
+    final txns = [
+      Transaction(
+        uuid: const Uuid().v4(),
+        currency: "CNY",
+        amount: -2500,
+        transactionDate: DateTime.now(),
+      )..setCategory(eatingOut),
+      Transaction(
+        uuid: const Uuid().v4(),
+        currency: "CNY",
+        amount: -300,
+        transactionDate: DateTime.now(),
+      )..setCategory(transport),
+    ];
+    for (final dark in [false, true]) {
+      await show(
+        tester,
+        Scaffold(
+          body: SingleChildScrollView(
+            child: BudgetCategoryUsage(
+              budget: sampleBudget,
+              transactions: txns,
+            ),
+          ),
+        ),
+        width: dark ? 360 : 430,
+        dark: dark,
+      );
+      expect(find.text("已超出"), findsOneWidget);
+      expect(find.text("还可花"), findsOneWidget);
+      expect(find.text(Money(500, "CNY").formattedExact), findsNWidgets(2));
+      final remaining = tester.widget<Text>(find.text("还可花"));
+      final over = tester.widget<Text>(find.text("已超出"));
+      expect(remaining.style!.color!.g, greaterThan(remaining.style!.color!.r));
+      expect(over.style!.color!.r, greaterThan(over.style!.color!.g));
+      await expectLater(
+        find.byType(Scaffold).first,
+        matchesGoldenFile(
+          "../../docs/previews/budget-room-${dark ? 'dark' : 'light'}.png",
+        ),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   }, skip: !renderPreview);
 }

@@ -1061,7 +1061,7 @@
   "budget.noCategoryLimit": "未设置类别上限",
   "budget.invalidCategoryLimit": "请输入 0 到 100 之间的比例",
   "budget.categoryUsage": "各类别预算占用",
-  "budget.categoryUsageHint": "已用比例和上限均以本预算总额为分母，待确认支出按预算总额的原有口径计入。",
+  "budget.categoryUsageHint": "已用比例占预算总额；设置上限时，进度条按类别上限计算。待确认支出按预算原有口径计入。",
   "budget.usedRatio": "已用：{ratio}%",
   "budget.limitRatio": "上限：{ratio}%",
   "budget.categoryExceeded": "超过类别上限",
@@ -1078,5 +1078,10 @@
   "calendar.distribution": "花销日历与规律",
   "calendar.heatmapSubtitle": "颜色越深花销越多，点击日期查看明细",
   "calendar.viewDay": "查看当日明细",
-  "calendar.viewTransactions": "查看全部 {count} 笔支出"
+  "calendar.viewTransactions": "查看全部 {count} 笔支出",
+  "budget.categoryRoomHint": "绿色为剩余额度，红色为超出金额",
+  "budget.categoryRemaining": "还可花",
+  "budget.categoryOverBy": "已超出",
+  "budget.categorySpent": "已花费",
+  "budget.categoryRoomUnavailable": "部分支出缺少汇率，暂无法计算准确差额"
 }

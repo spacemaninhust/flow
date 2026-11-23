@@ -1066,7 +1066,7 @@
   "budget.noCategoryLimit": "No category limit",
   "budget.invalidCategoryLimit": "Enter a percentage from 0 to 100",
   "budget.categoryUsage": "Category budget usage",
-  "budget.categoryUsageHint": "Usage and limits are percentages of the total budget; pending expenses follow the budget total.",
+  "budget.categoryUsageHint": "Usage share is of the total budget. With a category cap, the bar tracks that cap. Pending expenses follow the budget total.",
   "budget.usedRatio": "Used: {ratio}%",
   "budget.limitRatio": "Limit: {ratio}%",
   "budget.categoryExceeded": "Over category limit",
@@ -1083,5 +1083,10 @@
   "calendar.distribution": "Calendar & rhythm",
   "calendar.heatmapSubtitle": "Darker cells mean more spending. Tap a day for details.",
   "calendar.viewDay": "View day details",
-  "calendar.viewTransactions": "View all {count} transactions"
+  "calendar.viewTransactions": "View all {count} transactions",
+  "budget.categoryRoomHint": "Green shows remaining room; red shows overspend",
+  "budget.categoryRemaining": "Available to spend",
+  "budget.categoryOverBy": "Over limit by",
+  "budget.categorySpent": "Spent",
+  "budget.categoryRoomUnavailable": "Some expenses lack exchange rates; the exact difference is unavailable"
 }
