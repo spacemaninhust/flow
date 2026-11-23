@@ -58,41 +58,45 @@ class SpendingHeatmap extends StatelessWidget {
               topOffset: _headerHeight + _headerGap,
             ),
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                reverse: true,
-                child: Column(
-                  crossAxisAlignment: .start,
-                  children: [
-                    SizedBox(
-                      height: _headerHeight,
-                      child: _MonthLabels(
-                        weeks: weeks,
-                        columnWidth: columnWidth,
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Column(
+                    crossAxisAlignment: .start,
+                    children: [
+                      SizedBox(
+                        height: _headerHeight,
+                        child: _MonthLabels(
+                          weeks: weeks,
+                          columnWidth: columnWidth,
+                          from: from,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: _headerGap),
-                    Row(
-                      children: weeks
-                          .map(
-                            (monday) => Padding(
-                              padding: EdgeInsets.only(right: gap),
-                              child: _WeekColumn(
-                                monday: monday,
-                                dailyExpense: dailyExpense,
-                                thresholds: sorted,
-                                from: from,
-                                to: to,
-                                currency: currency,
-                                onDaySelected: onDaySelected,
-                                cellSize: cellSize,
-                                gap: gap,
+                      const SizedBox(height: _headerGap),
+                      Row(
+                        children: weeks
+                            .map(
+                              (monday) => Padding(
+                                padding: EdgeInsets.only(right: gap),
+                                child: _WeekColumn(
+                                  monday: monday,
+                                  dailyExpense: dailyExpense,
+                                  thresholds: sorted,
+                                  from: from,
+                                  to: to,
+                                  currency: currency,
+                                  onDaySelected: onDaySelected,
+                                  cellSize: cellSize,
+                                  gap: gap,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
+                            )
+                            .toList(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -234,7 +238,10 @@ class _WeekdayLabels extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Only label Mon / Wed / Fri to keep the rail uncluttered.
-    const Map<int, String> labels = {0: "M", 2: "W", 4: "F"};
+    final Map<int, String> labels = {
+      for (final index in [0, 2, 4])
+        index: DateTime(2024, 1, index + 1).toMoment().format("dd"),
+    };
     final TextStyle? style = context.textTheme.labelSmall?.semi(context);
 
     return Padding(
@@ -256,8 +263,13 @@ class _WeekdayLabels extends StatelessWidget {
 class _MonthLabels extends StatelessWidget {
   final List<DateTime> weeks;
   final double columnWidth;
+  final DateTime from;
 
-  const _MonthLabels({required this.weeks, required this.columnWidth});
+  const _MonthLabels({
+    required this.weeks,
+    required this.columnWidth,
+    required this.from,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -266,9 +278,11 @@ class _MonthLabels extends StatelessWidget {
     return Row(
       children: weeks.asMap().entries.map((entry) {
         final int index = entry.key;
-        final DateTime monday = entry.value;
-        final bool newMonth =
-            index == 0 || weeks[index - 1].month != monday.month;
+        final DateTime monday = entry.value.isBefore(from) ? from : entry.value;
+        final DateTime previous = index == 0
+            ? monday
+            : (weeks[index - 1].isBefore(from) ? from : weeks[index - 1]);
+        final bool newMonth = index == 0 || previous.month != monday.month;
 
         return SizedBox(
           width: columnWidth,

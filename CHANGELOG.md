@@ -2,12 +2,22 @@
 
 ## next
 
+* Redesigned the spending calendar with a prominent overview and grouped trend,
+  daily detail, heatmap and weekday rhythm sections.
+
+* Hide budget category rows with no spending and support fixed monetary caps.
+
+* Prevented calendar axis labels near the final date from overlapping.
+* Added daily spending averages over elapsed calendar days, including zero days.
+* Added category percentage ceilings to budget editing and usage comparisons.
+* Persisted category limits in an additive nullable database field and v2 backups.
+
 * Added daily spending trends with point selection and daily transaction details.
 * Added month-end account history to net worth and live balance trends to accounts.
 * Chart inspection uses Money formatting with two decimal places and responsive labels.
 * Restored calendar axis ticks and defaulted trend ranges to the current month.
 * Spending heatmap cells open the selected day's total and transaction details.
-* Kept the 0.26.0 database entities and backup format unchanged.
+* Preserved existing database IDs and read compatibility with 0.26.0 backups.
 
 ## 0.26.0
 

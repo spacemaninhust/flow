@@ -1,4 +1,6 @@
 import "package:flow/data/chart_data.dart";
+import "package:flow/data/money.dart";
+import "package:flow/l10n/extensions.dart";
 import "package:flow/theme/flow_color_scheme.dart";
 import "package:flow/theme/theme.dart";
 import "package:flow/utils/extensions/chart_data.dart";
@@ -15,6 +17,7 @@ class GroupListTile extends StatelessWidget {
   final Color color;
 
   final VoidCallback? onTap;
+  final Money? dailyAverage;
 
   const GroupListTile({
     super.key,
@@ -23,6 +26,7 @@ class GroupListTile extends StatelessWidget {
     required this.barFactor,
     required this.color,
     this.onTap,
+    this.dailyAverage,
   });
 
   @override
@@ -75,6 +79,23 @@ class GroupListTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6.0),
+                    if (dailyAverage != null)
+                      Row(
+                        children: [
+                          Text(
+                            "stats.dailyAverage".t(context),
+                            style: context.textTheme.bodySmall,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: MoneyText(
+                              dailyAverage,
+                              autoSize: true,
+                              style: context.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
                     ClipRRect(
                       borderRadius: .all(Radius.circular(3.0)),
                       child: LinearProgressIndicator(

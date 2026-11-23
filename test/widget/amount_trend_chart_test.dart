@@ -143,9 +143,8 @@ void main() {
       find.text(Money(123456789.123456789, "CNY").formattedExact),
       findsOneWidget,
     );
-    expect(find.text("Nov 6"), findsOneWidget);
     expect(find.text("Nov 11"), findsOneWidget);
-    expect(find.text("Nov 16"), findsOneWidget);
+    expect(find.text("Nov 20"), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

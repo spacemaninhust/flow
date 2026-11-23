@@ -1,4 +1,6 @@
 import "package:flow/l10n/extensions.dart";
+import "package:flow/data/spending_statistics.dart";
+import "package:flow/services/amount_trends.dart";
 import "package:flow/objectbox.dart";
 import "package:flow/objectbox/actions.dart";
 import "package:flow/theme/theme.dart";
@@ -38,6 +40,8 @@ class _TopCategoriesTileState extends State<TopCategoriesTile>
 
   List<_Slice> slices = [];
   double maxAmount = 0.0;
+  int averageDays = 0;
+  int generation = 0;
 
   @override
   void didUpdateWidget(TopCategoriesTile oldWidget) {
@@ -50,7 +54,7 @@ class _TopCategoriesTileState extends State<TopCategoriesTile>
     return BentoTile(
       label: "tabs.stats.analytics.topCategories".t(context),
       icon: Symbols.donut_small_rounded,
-      height: 158.0,
+      height: 80 + (slices.isEmpty ? 1 : slices.length) * 60.0,
       busy: busy && !loaded,
       onTap: () => context.push(
         "/stats/category?range=${Uri.encodeQueryComponent(widget.range.encodeShort())}",
@@ -71,6 +75,7 @@ class _TopCategoriesTileState extends State<TopCategoriesTile>
                       color: slice.color,
                       maxAmount: maxAmount,
                       currency: primaryCurrency,
+                      averageDays: averageDays,
                     ),
                   )
                   .toList(),
@@ -80,12 +85,30 @@ class _TopCategoriesTileState extends State<TopCategoriesTile>
 
   @override
   Future<void> fetch() async {
+    final request = ++generation;
+    final range = widget.range;
     try {
-      final analytics = await ObjectBox().flowByCategories(range: widget.range);
+      final now = DateTime.now();
+      final from = range.from <= Moment.minValue
+          ? await firstSettledLedgerDate() ?? now
+          : range.from;
+      if (!mounted || request != generation) return;
+      final days = elapsedSpendingDays(from, range.to, now);
+      if (days == 0) {
+        slices = [];
+        averageDays = 0;
+        loaded = true;
+        return;
+      }
+      final end = range.to.isBefore(now) ? range.to : now;
+      final analytics = await ObjectBox().flowByCategories(
+        range: CustomTimeRange(from, end.isBefore(from) ? from : end),
+      );
 
       // Resolve the theme palette only after the await — the first fetch runs
       // from initState (via the mixin), before inherited widgets are readable.
-      if (!mounted) return;
+      if (!mounted || request != generation) return;
+      averageDays = days;
       final List<Color> palette = context.chartAccents;
 
       final List<_Slice> next = [];
@@ -116,8 +139,7 @@ class _TopCategoriesTileState extends State<TopCategoriesTile>
       maxAmount = slices.isEmpty ? 0.0 : slices.first.amount;
       loaded = true;
     } finally {
-      busy = false;
-      if (mounted) setState(() {});
+      if (mounted && request == generation) setState(() => busy = false);
     }
   }
 }

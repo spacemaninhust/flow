@@ -1,6 +1,8 @@
 import "dart:async";
 
 import "package:flow/data/chart_data.dart";
+import "package:flow/data/spending_statistics.dart";
+import "package:flow/services/amount_trends.dart";
 import "package:flow/data/exchange_rates.dart";
 import "package:flow/data/flow_analytics.dart";
 import "package:flow/data/money.dart";
@@ -46,6 +48,8 @@ class StatsByGroupPageState extends State<StatsByGroupPage>
 
   bool busy = false;
   bool useChart = false;
+  int averageDays = 0;
+  int generation = 0;
 
   @override
   void initState() {
@@ -167,6 +171,9 @@ class StatsByGroupPageState extends State<StatsByGroupPage>
                               changeMode: changeMode,
                               range: range,
                               type: TransactionType.expense,
+                              averageDays: widget.byCategory
+                                  ? averageDays
+                                  : null,
                               byCategory: widget.byCategory,
                             ),
                       useChart
@@ -208,22 +215,34 @@ class StatsByGroupPageState extends State<StatsByGroupPage>
   }
 
   Future<void> fetch() async {
-    if (busy) return;
+    final request = ++generation;
+    final selectedRange = range;
 
     setState(() {
       busy = true;
     });
 
     try {
-      analytics = widget.byCategory
-          ? await ObjectBox().flowByCategories(range: range)
-          : await ObjectBox().flowByAccounts(range: range);
+      final now = DateTime.now();
+      final from = selectedRange.from <= Moment.minValue
+          ? await firstSettledLedgerDate() ?? now
+          : selectedRange.from;
+      final days = elapsedSpendingDays(from, selectedRange.to, now);
+      final end = selectedRange.to.isBefore(now) ? selectedRange.to : now;
+      final effectiveRange = CustomTimeRange(
+        from,
+        end.isBefore(from) ? from : end,
+      );
+      final result = widget.byCategory && days == 0
+          ? FlowAnalytics(flow: {}, range: selectedRange)
+          : widget.byCategory
+          ? await ObjectBox().flowByCategories(range: effectiveRange)
+          : await ObjectBox().flowByAccounts(range: selectedRange);
+      if (!mounted || request != generation) return;
+      analytics = result;
+      averageDays = days;
     } finally {
-      busy = false;
-
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted && request == generation) setState(() => busy = false);
     }
   }
 

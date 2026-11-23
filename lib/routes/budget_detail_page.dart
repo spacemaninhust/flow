@@ -14,6 +14,7 @@ import "package:flow/utils/budget_change_aware_state.dart";
 import "package:flow/utils/primary_currency_dependent_state.dart";
 import "package:flow/widgets/analytics/bullet_chart.dart";
 import "package:flow/widgets/budgets/budget_category_chips.dart";
+import "package:flow/widgets/budgets/budget_category_usage.dart";
 import "package:flow/widgets/budgets/budget_history_strip.dart";
 import "package:flow/widgets/budgets/budget_insight_row.dart";
 import "package:flow/widgets/general/frame.dart";
@@ -109,18 +110,25 @@ class _BudgetDetailPageState extends State<BudgetDetailPage>
         builder: (context, snapshot) {
           final List<Transaction> transactions = snapshot.data ?? const [];
 
-          final Widget header = _buildHeader(context, budget, period);
+          final Widget header = Column(
+            children: [
+              _buildHeader(context, budget, period),
+              BudgetCategoryUsage(
+                budget: budget,
+                transactions: transactions,
+                rates: rates,
+              ),
+              ListHeader("budget.detail.transactions".t(context)),
+            ],
+          );
 
           return TransactionsSelectionScope(
             controller: _selection,
             visibleTransactions: transactions,
             child: SafeArea(
               child: transactions.isEmpty
-                  ? Column(
-                      children: [
-                        header,
-                        const Expanded(child: NoResult()),
-                      ],
+                  ? SingleChildScrollView(
+                      child: Column(children: [header, const NoResult()]),
                     )
                   : GroupedTransactionsListView(
                       selectionController: _selection,
@@ -197,7 +205,6 @@ class _BudgetDetailPageState extends State<BudgetDetailPage>
           ),
         ],
         const SizedBox(height: 20.0),
-        ListHeader("budget.detail.transactions".t(context)),
       ],
     );
   }

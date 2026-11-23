@@ -8,11 +8,8 @@ import "package:flow/objectbox/actions.dart";
 import "package:flow/theme/theme.dart";
 import "package:flow/utils/extensions.dart";
 import "package:flow/utils/primary_currency_dependent_state.dart";
-import "package:flow/widgets/analytics/insight_card.dart";
 import "package:flow/widgets/analytics/spending_heatmap.dart";
 import "package:flow/widgets/analytics/weekday_bars.dart";
-import "package:flow/widgets/general/frame.dart";
-import "package:flow/widgets/general/money_text.dart";
 import "package:flow/widgets/general/spinner.dart";
 import "package:flow/widgets/stats/emphasized_text.dart";
 import "package:flow/widgets/stats/missing_rates_notice.dart";
@@ -21,6 +18,8 @@ import "package:flow/widgets/stats/stats_empty_state.dart";
 import "package:flow/widgets/time_range_selector.dart";
 import "package:flow/widgets/stats/amount_trend_chart.dart";
 import "package:flow/widgets/stats/exact_amount_text.dart";
+import "package:flow/widgets/stats/calendar/calendar_overview.dart";
+import "package:flow/widgets/stats/calendar/calendar_section.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:material_symbols_icons_flow/symbols.dart";
@@ -67,60 +66,78 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
         child: busy && dailyExpense.isEmpty
             ? const Spinner.center()
             : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
                 child: Column(
                   crossAxisAlignment: .start,
                   children: [
-                    const SizedBox(height: 16.0),
-                    Frame(
-                      child: TimeRangeSelector(
-                        initialValue: range,
-                        onChanged: _updateRange,
+                    TimeRangeSelector(
+                      initialValue: range,
+                      onChanged: _updateRange,
+                    ),
+                    const SizedBox(height: 20),
+                    CalendarOverview(
+                      total: Money(total, primaryCurrency),
+                      days: points.length,
+                      label: "tabs.stats.analytics.calendar.spentIn".t(
+                        context,
+                        range.format(useRelative: false),
                       ),
                     ),
-                    const SizedBox(height: 16.0),
-                    Frame(
+                    const SizedBox(height: 24),
+                    CalendarSection(
+                      icon: Symbols.show_chart_rounded,
+                      title: "calendar.dailyTrend".t(context),
+                      subtitle: "calendar.trendSubtitle".t(context),
                       child: Column(
-                        crossAxisAlignment: .start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "tabs.stats.analytics.calendar.spentIn".t(
-                              context,
-                              range.format(useRelative: false),
+                          AmountTrendChart(
+                            points: points,
+                            currency: primaryCurrency,
+                            height: 180,
+                            onSelected: (point) =>
+                                setState(() => selectedDay = point.date),
+                          ),
+                          if (points.isNotEmpty) ...[
+                            Divider(
+                              height: 32,
+                              color: context.colorScheme.onSurface.withAlpha(
+                                24,
+                              ),
                             ),
-                            style: context.textTheme.titleSmall?.semi(context),
-                          ),
-                          const SizedBox(height: 2.0),
-                          MoneyText(
-                            Money(total, primaryCurrency),
-                            style: context.textTheme.displaySmall,
-                            autoSize: true,
-                            tapToToggleAbbreviation: true,
-                          ),
+                            _dayDetails(context, compact: true),
+                          ],
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16.0),
-                    Frame(
-                      child: AmountTrendChart(
-                        points: points,
-                        currency: primaryCurrency,
-                        onSelected: (point) =>
-                            setState(() => selectedDay = point.date),
-                      ),
-                    ),
-                    if (points.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _dayDetails(context),
-                      const SizedBox(height: 16),
-                    ],
+                    const SizedBox(height: 20),
                     if (hasData)
-                      Frame(
-                        child: SpendingHeatmap(
-                          dailyExpense: dailyExpense,
-                          from: from,
-                          to: to,
-                          currency: primaryCurrency,
-                          onDaySelected: _showHeatmapDay,
+                      CalendarSection(
+                        icon: Symbols.calendar_month_rounded,
+                        title: "calendar.distribution".t(context),
+                        subtitle: "calendar.heatmapSubtitle".t(context),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SpendingHeatmap(
+                              dailyExpense: dailyExpense,
+                              from: from,
+                              to: to,
+                              currency: primaryCurrency,
+                              onDaySelected: _showHeatmapDay,
+                              cellSize: 24,
+                              gap: 6,
+                            ),
+                            if (weekdayExpense.isNotEmpty) ...[
+                              Divider(
+                                height: 40,
+                                color: context.colorScheme.onSurface.withAlpha(
+                                  24,
+                                ),
+                              ),
+                              _buildWeekdayInsight(context),
+                            ],
+                          ],
                         ),
                       )
                     else
@@ -129,10 +146,6 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
                           context,
                         ),
                       ),
-                    if (weekdayExpense.isNotEmpty) ...[
-                      const SizedBox(height: 16.0),
-                      _buildWeekdayInsight(context),
-                    ],
                     if (missingRates) ...[
                       const SizedBox(height: 8.0),
                       MissingRatesNotice(
@@ -141,7 +154,6 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
                         ),
                       ),
                     ],
-                    const SizedBox(height: 96.0),
                   ],
                 ),
               ),
@@ -158,13 +170,20 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
       builder: (context) => SafeArea(
         child: SizedBox(
           height: MediaQuery.sizeOf(context).height * .65,
-          child: SingleChildScrollView(child: _dayDetails(context, day)),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: _dayDetails(context, date: day),
+          ),
         ),
       ),
     );
   }
 
-  Widget _dayDetails(BuildContext context, [DateTime? date]) {
+  Widget _dayDetails(
+    BuildContext context, {
+    DateTime? date,
+    bool compact = false,
+  }) {
     final DateTime day = date ?? selectedDay ?? points.last.date;
     final List<Transaction> items = expenses
         .where(
@@ -177,8 +196,8 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Frame(
-          child: ExactAmountText(
+        if (!compact) ...[
+          ExactAmountText(
             amount: points
                 .where((point) => DateUtils.isSameDay(point.date, day))
                 .first
@@ -186,16 +205,40 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
             currency: primaryCurrency,
             style: context.textTheme.headlineSmall,
           ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                "trend.dayDetails".t(
+                  context,
+                  day.toMoment().format("YYYY-MM-DD"),
+                ),
+                style: context.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (compact)
+              IconButton(
+                tooltip: "calendar.viewDay".t(context),
+                onPressed: () => _showHeatmapDay(day),
+                icon: const Icon(Symbols.open_in_new_rounded, size: 18),
+              ),
+          ],
         ),
-        Frame(
-          child: Text(
-            "trend.dayDetails".t(context, day.toMoment().format("YYYY-MM-DD")),
-            style: context.textTheme.titleMedium,
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              "trend.noSpending".t(context),
+              style: context.textTheme.bodySmall,
+            ),
           ),
-        ),
-        if (items.isEmpty) Frame(child: Text("trend.noSpending".t(context))),
-        ...items.map(
+        ...(compact ? items.take(2) : items).map(
           (transaction) => ListTile(
+            contentPadding: EdgeInsets.zero,
             title: Text(
               transaction.title?.isNotEmpty == true
                   ? transaction.title!
@@ -206,7 +249,7 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
             ),
             trailing: ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.sizeOf(context).width * .5,
+                maxWidth: MediaQuery.sizeOf(context).width * .35,
               ),
               child: ExactAmountText(
                 amount: Decimal.parse(transaction.amount.abs().toString()),
@@ -217,6 +260,11 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
             onTap: () => context.push("/transaction/${transaction.id}"),
           ),
         ),
+        if (compact && items.length > 2)
+          TextButton(
+            onPressed: () => _showHeatmapDay(day),
+            child: Text("calendar.viewTransactions".t(context, items.length)),
+          ),
       ],
     );
   }
@@ -226,18 +274,31 @@ class _SpendingCalendarPageState extends State<SpendingCalendarPage>
         .reduce((a, b) => a.value >= b.value ? a : b)
         .key;
 
-    return InsightCard(
-      icon: Symbols.calendar_month_rounded,
-      label: "tabs.stats.analytics.rhythm".t(context),
-      title: EmphasizedText(
-        template: "tabs.stats.analytics.calendar.priciestDay".t(context),
-        value: _weekdayName(topWeekday),
-      ),
-      child: WeekdayBars(
-        byWeekday: weekdayExpense,
-        topWeekday: topWeekday,
-        accent: context.colorScheme.primary,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "tabs.stats.analytics.rhythm".t(context),
+          style: context.textTheme.labelLarge?.copyWith(
+            color: context.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        EmphasizedText(
+          template: "tabs.stats.analytics.calendar.priciestDay".t(context),
+          value: _weekdayName(topWeekday),
+        ),
+        const SizedBox(height: 16),
+        WeekdayBars(
+          byWeekday: weekdayExpense,
+          topWeekday: topWeekday,
+          accent: context.colorScheme.primary,
+          weekdayLabels: List.generate(
+            7,
+            (index) => DateTime(2024, 1, index + 1).toMoment().format("dd"),
+          ),
+        ),
+      ],
     );
   }
 

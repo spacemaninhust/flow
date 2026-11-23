@@ -22,6 +22,16 @@ Budget _$BudgetFromJson(Map<String, dynamic> json) =>
       ..timeRange = const TimeRangeConverter().fromJson(
         json['timeRange'] as String,
       )
+      ..categoryLimits =
+          (json['categoryLimits'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, (e as num).toDouble()),
+          ) ??
+          {}
+      ..categoryAmountLimits =
+          (json['categoryAmountLimits'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, (e as num).toDouble()),
+          ) ??
+          {}
       ..categoriesUuids = (json['categoriesUuids'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList();
@@ -35,6 +45,8 @@ Map<String, dynamic> _$BudgetToJson(Budget instance) => <String, dynamic>{
   'renewAutomatically': instance.renewAutomatically,
   'amount': instance.amount,
   'currency': instance.currency,
+  'categoryLimits': instance.categoryLimits,
+  'categoryAmountLimits': instance.categoryAmountLimits,
   'categoriesUuids': instance.categoriesUuids,
 };
 

@@ -10,6 +10,9 @@ import "package:flow/theme/flow_color_scheme.dart";
 import "package:flow/utils/json/utc_datetime_converter.dart";
 import "package:json_annotation/json_annotation.dart";
 import "package:material_symbols_icons_flow/symbols.dart";
+// Keep annotations resolvable while objectbox.g.dart is being regenerated.
+// ignore: unnecessary_import
+import "package:objectbox/objectbox.dart";
 import "package:uuid/uuid.dart";
 
 part "account.g.dart";

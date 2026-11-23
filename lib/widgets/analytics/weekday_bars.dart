@@ -9,12 +9,14 @@ class WeekdayBars extends StatelessWidget {
   final Map<int, double> byWeekday;
   final int topWeekday;
   final Color accent;
+  final List<String>? weekdayLabels;
 
   const WeekdayBars({
     super.key,
     required this.byWeekday,
     required this.topWeekday,
     required this.accent,
+    this.weekdayLabels,
   });
 
   @override
@@ -24,7 +26,8 @@ class WeekdayBars extends StatelessWidget {
         : byWeekday.values.reduce((a, b) => a > b ? a : b);
     final Color base = context.colorScheme.onSurface.withAlpha(0x33);
 
-    const List<String> labels = ["M", "T", "W", "T", "F", "S", "S"];
+    final List<String> labels =
+        weekdayLabels ?? const ["M", "T", "W", "T", "F", "S", "S"];
 
     return SizedBox(
       height: 56.0,

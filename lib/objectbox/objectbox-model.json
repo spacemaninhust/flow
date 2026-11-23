@@ -530,7 +530,7 @@
     },
     {
       "id": "11:4948078457888921031",
-      "lastPropertyId": "11:3812796204565944657",
+      "lastPropertyId": "12:7539109554874364981",
       "name": "Budget",
       "properties": [
         {
@@ -582,6 +582,11 @@
           "id": "11:3812796204565944657",
           "name": "categoriesUuids",
           "type": 30
+        },
+        {
+          "id": "12:7539109554874364981",
+          "name": "categoryLimitsJson",
+          "type": 9
         }
       ],
       "relations": [

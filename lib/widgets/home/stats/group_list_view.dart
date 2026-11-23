@@ -1,4 +1,6 @@
 import "package:flow/data/chart_data.dart";
+import "package:flow/data/money.dart";
+import "package:flow/data/spending_statistics.dart";
 import "package:flow/entity/category.dart";
 import "package:flow/entity/transaction.dart";
 import "package:flow/utils/extensions/chart_data.dart";
@@ -16,6 +18,7 @@ class GroupListView extends StatelessWidget {
   final TransactionType type;
   final bool byCategory;
   final void Function() changeMode;
+  final int? averageDays;
 
   const GroupListView({
     super.key,
@@ -24,6 +27,7 @@ class GroupListView extends StatelessWidget {
     required this.type,
     required this.byCategory,
     required this.changeMode,
+    this.averageDays,
   });
 
   @override
@@ -57,6 +61,15 @@ class GroupListView extends StatelessWidget {
 
               return GroupListTile(
                 chartData: chartData,
+                dailyAverage: averageDays == null
+                    ? null
+                    : Money(
+                        dailySpendingAverage(
+                          chartData.displayTotal,
+                          averageDays!,
+                        ),
+                        chartData.currency,
+                      ),
                 percent: total > 0 ? chartData.displayTotal / total * 100 : 0,
                 barFactor: maxAmount > 0
                     ? chartData.displayTotal / maxAmount

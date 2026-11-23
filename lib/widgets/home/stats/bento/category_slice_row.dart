@@ -1,4 +1,6 @@
 import "package:flow/data/money.dart";
+import "package:flow/data/spending_statistics.dart";
+import "package:flow/l10n/extensions.dart";
 import "package:flow/theme/theme.dart";
 import "package:flow/widgets/general/money_text.dart";
 import "package:flutter/material.dart";
@@ -11,6 +13,7 @@ class CategorySliceRow extends StatelessWidget {
   final Color color;
   final double maxAmount;
   final String currency;
+  final int? averageDays;
 
   const CategorySliceRow({
     super.key,
@@ -19,6 +22,7 @@ class CategorySliceRow extends StatelessWidget {
     required this.color,
     required this.maxAmount,
     required this.currency,
+    this.averageDays,
   });
 
   @override
@@ -42,13 +46,33 @@ class CategorySliceRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6.0),
-            MoneyText(
-              Money(amount, currency),
-              style: context.textTheme.labelSmall?.semi(context),
-              initiallyAbbreviated: true,
+            Flexible(
+              child: MoneyText(
+                Money(amount, currency),
+                style: context.textTheme.labelSmall?.semi(context),
+                autoSize: true,
+                textAlign: TextAlign.end,
+              ),
             ),
           ],
         ),
+        if (averageDays != null)
+          Row(
+            children: [
+              Text(
+                "stats.dailyAverage".t(context),
+                style: context.textTheme.labelSmall,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: MoneyText(
+                  Money(dailySpendingAverage(amount, averageDays!), currency),
+                  autoSize: true,
+                  style: context.textTheme.labelSmall,
+                ),
+              ),
+            ],
+          ),
         const SizedBox(height: 3.0),
         ClipRRect(
           borderRadius: .all(Radius.circular(3.0)),

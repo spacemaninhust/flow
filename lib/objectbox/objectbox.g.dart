@@ -653,7 +653,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(11, 4948078457888921031),
     name: 'Budget',
-    lastPropertyId: const obx_int.IdUid(11, 3812796204565944657),
+    lastPropertyId: const obx_int.IdUid(12, 7539109554874364981),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -710,6 +710,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(11, 3812796204565944657),
         name: 'categoriesUuids',
         type: 30,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 7539109554874364981),
+        name: 'categoryLimitsJson',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -1895,7 +1901,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
                     .map(fbb.writeString)
                     .toList(growable: false),
               );
-        fbb.startTable(12);
+        final categoryLimitsJsonOffset = object.categoryLimitsJson == null
+            ? null
+            : fbb.writeString(object.categoryLimitsJson!);
+        fbb.startTable(13);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, uuidOffset);
         fbb.addInt64(2, object.createdDate.millisecondsSinceEpoch);
@@ -1905,6 +1914,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(8, rangeOffset);
         fbb.addBool(9, object.renewAutomatically);
         fbb.addOffset(10, categoriesUuidsOffset);
+        fbb.addOffset(11, categoryLimitsJsonOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1957,7 +1967,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
               ..categoriesUuids = const fb.ListReader<String>(
                 fb.StringReader(asciiOptimization: true),
                 lazy: false,
-              ).vTableGetNullable(buffer, rootOffset, 24);
+              ).vTableGetNullable(buffer, rootOffset, 24)
+              ..categoryLimitsJson = const fb.StringReader(
+                asciiOptimization: true,
+              ).vTableGetNullable(buffer, rootOffset, 26);
         obx_int.InternalToManyAccess.setRelInfo<Budget>(
           object.categories,
           store,
@@ -2809,6 +2822,11 @@ class Budget_ {
   /// See [Budget.categoriesUuids].
   static final categoriesUuids = obx.QueryStringVectorProperty<Budget>(
     _entities[7].properties[8],
+  );
+
+  /// See [Budget.categoryLimitsJson].
+  static final categoryLimitsJson = obx.QueryStringProperty<Budget>(
+    _entities[7].properties[9],
   );
 
   /// see [Budget.categories]

@@ -3,12 +3,18 @@ import "dart:io";
 import "package:flow/data/flow_icon.dart";
 import "package:flow/data/money.dart";
 import "package:flow/entity/account.dart";
+import "package:flow/entity/budget.dart";
+import "package:flow/entity/category.dart";
 import "package:flow/entity/transaction.dart";
 import "package:flow/l10n/flow_localizations.dart";
 import "package:flow/objectbox.dart";
 import "package:flow/prefs/local_preferences.dart";
 import "package:flow/providers/accounts_provider.dart";
 import "package:flow/routes/account_page.dart";
+import "package:flow/routes/budget_page.dart";
+import "package:flow/routes/budget_detail_page.dart";
+import "package:flow/widgets/budgets/budget_category_usage.dart";
+import "package:flow/widgets/home/stats/bento/top_categories_tile.dart";
 import "package:flow/routes/stats/net_worth_page.dart";
 import "package:flow/routes/stats/spending_calendar_page.dart";
 import "package:flow/services/user_preferences.dart";
@@ -17,7 +23,7 @@ import "package:flow/theme/theme.dart";
 import "package:flow/widgets/stats/amount_trend_chart.dart";
 import "package:flow/widgets/time_range_selector.dart";
 import "package:flutter/material.dart";
-import "package:flutter/foundation.dart";
+import "package:flutter/foundation.dart" hide Category;
 import "package:flutter/services.dart";
 import "package:flutter_localizations/flutter_localizations.dart";
 import "package:flutter_test/flutter_test.dart";
@@ -30,6 +36,7 @@ import "package:shared_preferences_platform_interface/in_memory_shared_preferenc
 // ignore: depend_on_referenced_packages
 import "package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart";
 import "package:uuid/uuid.dart";
+import "package:go_router/go_router.dart";
 
 class _PreviewLocalizations extends LocalizationsDelegate<FlowLocalizations> {
   const _PreviewLocalizations();
@@ -49,6 +56,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Account cash;
   late Account savings;
+  late Category eatingOut;
+  late Budget budget;
   late Directory temporary;
 
   setUpAll(() async {
@@ -75,6 +84,24 @@ void main() {
       iconCode: const IconFlowIcon(Symbols.savings_rounded).toString(),
     );
     ObjectBox().box<Account>().putMany([cash, savings]);
+    eatingOut = Category(
+      name: "外食",
+      iconCode: const IconFlowIcon(Symbols.restaurant_rounded).toString(),
+    );
+    ObjectBox().box<Category>().put(eatingOut);
+    ObjectBox().box<Category>().put(
+      Category(
+        name: "无花销类别",
+        iconCode: const IconFlowIcon(Symbols.shopping_bag_rounded).toString(),
+      ),
+    );
+    budget = Budget(
+      name: "月度预算",
+      amount: 10000,
+      currency: "CNY",
+      range: TimeRange.thisMonth().toString(),
+    )..categoryLimits = {eatingOut.uuid: 20};
+    ObjectBox().box<Budget>().put(budget);
     final now = DateTime.now();
     void add(
       Account account,
@@ -92,6 +119,7 @@ void main() {
         subtype: subtype,
       );
       transaction.setAccount(account);
+      if (amount < 0 && subtype == null) transaction.setCategory(eatingOut);
       ObjectBox().box<Transaction>().put(transaction);
     }
 
@@ -143,8 +171,13 @@ void main() {
     expect(tester.takeException(), isNull);
   }
 
-  Future<void> show(WidgetTester tester, Widget page) async {
-    tester.view.physicalSize = const Size(430, 1100);
+  Future<void> show(
+    WidgetTester tester,
+    Widget page, {
+    double width = 430,
+    bool dark = false,
+  }) async {
+    tester.view.physicalSize = Size(width, 1100);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -172,9 +205,27 @@ void main() {
         await loader.load();
       }
     });
-    final theme = ThemeFactory(flowLights.schemes.first).materialTheme;
+    final theme = ThemeFactory(
+      dark ? flowDarks.schemes.first : flowLights.schemes.first,
+    ).materialTheme;
+    final router = GoRouter(
+      initialLocation: "/preview",
+      routes: [
+        GoRoute(
+          path: "/",
+          builder: (_, _) => const SizedBox.shrink(),
+          routes: [
+            GoRoute(
+              path: "preview",
+              builder: (_, _) => AccountsProvider([cash, savings], child: page),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
     await tester.pumpWidget(
-      MaterialApp(
+      MaterialApp.router(
         debugShowCheckedModeBanner: false,
         locale: const Locale("zh", "CN"),
         supportedLocales: const [Locale("zh", "CN")],
@@ -187,7 +238,7 @@ void main() {
         theme: theme.copyWith(
           textTheme: theme.textTheme.apply(fontFamily: "PreviewChinese"),
         ),
-        home: AccountsProvider([cash, savings], child: page),
+        routerConfig: router,
       ),
     );
     await settle(tester);
@@ -222,6 +273,11 @@ void main() {
     await tester.ensureVisible(
       find.byKey(ValueKey("spending-day-${day.toIso8601String()}")),
     );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold).first,
+      matchesGoldenFile("../../docs/previews/calendar-distribution.png"),
+    );
     await tester.tap(
       find.byKey(ValueKey("spending-day-${day.toIso8601String()}")),
     );
@@ -247,6 +303,16 @@ void main() {
           .length,
       lessThanOrEqualTo(366),
     );
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, skip: !renderPreview);
+
+  testWidgets("calendar narrow dark layout preview", (tester) async {
+    await show(tester, const SpendingCalendarPage(), width: 360, dark: true);
+    await expectLater(
+      find.byType(Scaffold).first,
+      matchesGoldenFile("../../docs/previews/calendar-dark.png"),
+    );
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, skip: !renderPreview);
 
@@ -321,6 +387,112 @@ void main() {
           .points
           .length,
       lessThanOrEqualTo(24),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, skip: !renderPreview);
+
+  testWidgets("budget category editor and usage preview", (tester) async {
+    await show(tester, BudgetPage(budgetId: budget.id));
+    final field = find.byKey(ValueKey("category-limit-${eatingOut.uuid}"));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, "101");
+    expect(tester.state<FormState>(find.byType(Form)).validate(), isFalse);
+    await tester.pumpAndSettle();
+    expect(find.text("请输入 0 到 100 之间的比例"), findsOneWidget);
+    await tester.enterText(field, "20");
+    expect(tester.state<FormState>(find.byType(Form)).validate(), isTrue);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold).first,
+      matchesGoldenFile("../../docs/previews/budget-editor.png"),
+    );
+    await tester.enterText(field, "30");
+    await tester.tap(find.byTooltip("保存"));
+    await settle(tester);
+    expect(
+      ObjectBox().box<Budget>().get(budget.id)!.categoryLimits[eatingOut.uuid],
+      30,
+    );
+    final now = DateTime.now();
+    final txn = Transaction(
+      uuid: const Uuid().v4(),
+      currency: "CNY",
+      amount: -2500,
+      transactionDate: now,
+    )..setCategory(eatingOut);
+    await show(
+      tester,
+      Scaffold(
+        body: BudgetCategoryUsage(budget: budget, transactions: [txn]),
+      ),
+    );
+    expect(find.text("已用：25.00%"), findsOneWidget);
+    expect(find.text("上限：20.00%"), findsOneWidget);
+    expect(find.text("超过类别上限"), findsOneWidget);
+    expect(find.text("无花销类别"), findsNothing);
+    expect(find.text(Money(2000, "CNY").formatted), findsOneWidget);
+    await expectLater(
+      find.byType(Scaffold).first,
+      matchesGoldenFile("../../docs/previews/budget-usage.png"),
+    );
+    await show(tester, BudgetDetailPage(budgetId: budget.id));
+    await tester.ensureVisible(find.text("各类别预算占用"));
+    await tester.pumpAndSettle();
+    expect(find.text("上限：30.00%"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await show(tester, BudgetPage(budgetId: budget.id));
+    final mode = find.byKey(ValueKey("category-limit-mode-${eatingOut.uuid}"));
+    await tester.ensureVisible(mode);
+    await tester.tap(mode);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("固定金额").last);
+    await tester.pumpAndSettle();
+    final amountField = find.byKey(
+      ValueKey("category-amount-limit-${eatingOut.uuid}"),
+    );
+    expect(tester.widget<TextFormField>(amountField).initialValue, "3000.0");
+    await tester.ensureVisible(amountField);
+    await tester.enterText(amountField, "-1");
+    expect(tester.state<FormState>(find.byType(Form)).validate(), isFalse);
+    await tester.enterText(amountField, "2000");
+    expect(tester.state<FormState>(find.byType(Form)).validate(), isTrue);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold).first,
+      matchesGoldenFile("../../docs/previews/budget-editor-fixed.png"),
+    );
+    await tester.tap(find.byTooltip("保存"));
+    await settle(tester);
+    final fixedBudget = ObjectBox().box<Budget>().get(budget.id)!;
+    expect(fixedBudget.categoryLimits, isEmpty);
+    expect(fixedBudget.categoryAmountLimits[eatingOut.uuid], 2000);
+    await show(tester, BudgetDetailPage(budgetId: budget.id));
+    await tester.ensureVisible(find.text("各类别预算占用"));
+    await tester.pumpAndSettle();
+    expect(find.text("固定金额上限"), findsOneWidget);
+    expect(find.text("无花销类别"), findsNothing);
+    await show(
+      tester,
+      Scaffold(
+        body: BudgetCategoryUsage(budget: fixedBudget, transactions: []),
+      ),
+    );
+    expect(find.text("各类别预算占用"), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, skip: !renderPreview);
+
+  testWidgets("popular categories show totals and daily averages", (
+    tester,
+  ) async {
+    await show(
+      tester,
+      Scaffold(body: TopCategoriesTile(range: TimeRange.thisMonth())),
+    );
+    expect(find.text("外食"), findsOneWidget);
+    expect(find.text("平均每天花销"), findsOneWidget);
+    await expectLater(
+      find.byType(Scaffold).first,
+      matchesGoldenFile("../../docs/previews/top-categories.png"),
     );
     await tester.pumpWidget(const SizedBox.shrink());
   }, skip: !renderPreview);

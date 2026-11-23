@@ -51,6 +51,9 @@ class _BudgetPageState extends State<BudgetPage> {
   late TimeRange _timeRange;
   late bool _renewAutomatically;
   late List<Category> _categories;
+  Map<String, double> _categoryLimits = {};
+  Map<String, double> _categoryAmountLimits = {};
+  Set<String> _fixedLimitCategories = {};
 
   /// The period shown when the form opened.
   ///
@@ -95,6 +98,11 @@ class _BudgetPageState extends State<BudgetPage> {
           : BudgetService().currentPeriod(_currentlyEditing!);
       _renewAutomatically = _currentlyEditing?.renewAutomatically ?? true;
       _categories = _currentlyEditing?.categories.toList() ?? [];
+      _categoryLimits = Map.of(_currentlyEditing?.categoryLimits ?? {});
+      _categoryAmountLimits = Map.of(
+        _currentlyEditing?.categoryAmountLimits ?? {},
+      );
+      _fixedLimitCategories = _categoryAmountLimits.keys.toSet();
       _initialRange = _timeRange.toString();
     }
   }
@@ -140,6 +148,7 @@ class _BudgetPageState extends State<BudgetPage> {
                   ),
                 ),
                 const SizedBox(height: 10.0),
+                _buildCategoryLimits(context),
                 _buildPeriodCard(context),
                 if (_currentlyEditing != null) ...[
                   const SizedBox(height: 36.0),
@@ -330,6 +339,137 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
+  Widget _buildCategoryLimits(BuildContext context) {
+    final categories = _categories.isEmpty
+        ? ObjectBox().getCategories()
+        : _categories;
+    return Surface(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "budget.categoryLimits".t(context),
+              style: context.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "budget.categoryLimitsHint".t(context),
+              style: context.textTheme.bodySmall,
+            ),
+            for (final category in categories)
+              Builder(
+                builder: (context) {
+                  final fixed = _fixedLimitCategories.contains(category.uuid);
+                  final values = fixed
+                      ? _categoryAmountLimits
+                      : _categoryLimits;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: Text(category.name)),
+                            DropdownButton<bool>(
+                              key: ValueKey(
+                                "category-limit-mode-${category.uuid}",
+                              ),
+                              value: fixed,
+                              items: [
+                                DropdownMenuItem(
+                                  value: false,
+                                  child: Text(
+                                    "budget.limitModePercent".t(context),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: true,
+                                  child: Text(
+                                    "budget.limitModeAmount".t(context),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null || value == fixed) return;
+                                final old = values[category.uuid];
+                                setState(() {
+                                  _categoryLimits.remove(category.uuid);
+                                  _categoryAmountLimits.remove(category.uuid);
+                                  if (value) {
+                                    _fixedLimitCategories.add(category.uuid);
+                                    if (old != null) {
+                                      _categoryAmountLimits[category.uuid] =
+                                          _amount * old / 100;
+                                    }
+                                  } else {
+                                    _fixedLimitCategories.remove(category.uuid);
+                                    if (old != null && _amount > 0) {
+                                      _categoryLimits[category.uuid] =
+                                          old / _amount * 100;
+                                    }
+                                  }
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        TextFormField(
+                          key: ValueKey(
+                            "category-${fixed ? 'amount-' : ''}limit-${category.uuid}",
+                          ),
+                          initialValue: values[category.uuid]?.toString(),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: "budget.noCategoryLimit".t(context),
+                            suffixText: fixed ? _currency : "%",
+                          ),
+                          validator: (text) {
+                            if (text == null || text.trim().isEmpty) {
+                              return null;
+                            }
+                            final value = double.tryParse(
+                              text.trim().replaceAll(",", "."),
+                            );
+                            return value == null ||
+                                    !value.isFinite ||
+                                    value < 0 ||
+                                    (!fixed && value > 100)
+                                ? (fixed
+                                          ? "budget.invalidAmountLimit"
+                                          : "budget.invalidCategoryLimit")
+                                      .t(context)
+                                : null;
+                          },
+                          onChanged: (text) {
+                            final value = double.tryParse(
+                              text.trim().replaceAll(",", "."),
+                            );
+                            if (text.trim().isEmpty) {
+                              values.remove(category.uuid);
+                            } else if (value != null &&
+                                value.isFinite &&
+                                value >= 0 &&
+                                (fixed || value <= 100)) {
+                              values[category.uuid] = value;
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Mirrors the pill header style of `InsightCard`.
   Widget _buildCardHeader(
     BuildContext context, {
@@ -412,6 +552,12 @@ class _BudgetPageState extends State<BudgetPage> {
 
     if (result?.value case List<Category> newCategories) {
       _categories = newCategories;
+      if (_categories.isNotEmpty) {
+        final ids = _categories.map((c) => c.uuid).toSet();
+        _categoryLimits.removeWhere((id, _) => !ids.contains(id));
+        _categoryAmountLimits.removeWhere((id, _) => !ids.contains(id));
+        _fixedLimitCategories.removeWhere((id) => !ids.contains(id));
+      }
     }
 
     if (mounted) setState(() {});
@@ -438,6 +584,8 @@ class _BudgetPageState extends State<BudgetPage> {
           budget.currency != _currency ||
           _initialRange != _timeRange.toString() ||
           budget.renewAutomatically != _renewAutomatically ||
+          !mapEquals(budget.categoryLimits, _categoryLimits) ||
+          !mapEquals(budget.categoryAmountLimits, _categoryAmountLimits) ||
           !setEquals(
             budget.categories.map((category) => category.uuid).toSet(),
             _categories.map((category) => category.uuid).toSet(),
@@ -446,6 +594,8 @@ class _BudgetPageState extends State<BudgetPage> {
 
     return _nameTextController.text.trim().isNotEmpty ||
         _amount != 0.0 ||
+        _categoryLimits.isNotEmpty ||
+        _categoryAmountLimits.isNotEmpty ||
         _categories.isNotEmpty;
   }
 
@@ -466,6 +616,8 @@ class _BudgetPageState extends State<BudgetPage> {
         ..currency = _currency
         ..timeRange = _timeRange
         ..renewAutomatically = _renewAutomatically
+        ..categoryLimits = _categoryLimits
+        ..categoryAmountLimits = _categoryAmountLimits
         ..setCategories(_categories);
 
       ObjectBox().box<Budget>().put(budget, mode: PutMode.update);
@@ -474,13 +626,17 @@ class _BudgetPageState extends State<BudgetPage> {
       return;
     }
 
-    final Budget budget = Budget(
-      name: trimmed,
-      amount: _amount,
-      currency: _currency,
-      range: _timeRange.toString(),
-      renewAutomatically: _renewAutomatically,
-    )..setCategories(_categories);
+    final Budget budget =
+        Budget(
+            name: trimmed,
+            amount: _amount,
+            currency: _currency,
+            range: _timeRange.toString(),
+            renewAutomatically: _renewAutomatically,
+          )
+          ..setCategories(_categories)
+          ..categoryLimits = _categoryLimits;
+    budget.categoryAmountLimits = _categoryAmountLimits;
 
     ObjectBox().box<Budget>().put(budget, mode: PutMode.insert);
 

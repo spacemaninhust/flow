@@ -38,7 +38,7 @@ android {
     minSdk = flutter.minSdkVersion
     targetSdk = 36
     versionCode = flutter.versionCode
-    versionName = flutter.versionName + if (personalBuild) "-personal.2" else ""
+    versionName = flutter.versionName + if (personalBuild) "-personal.5" else ""
   }
 
   val keystorePropertiesFile = rootProject.file(

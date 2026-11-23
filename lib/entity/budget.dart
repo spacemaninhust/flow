@@ -1,3 +1,5 @@
+import "dart:convert";
+
 import "package:flow/entity/_base.dart";
 import "package:flow/entity/category.dart";
 import "package:flow/utils/json/time_range_converter.dart";
@@ -52,6 +54,58 @@ class Budget implements EntityBase {
   double amount;
 
   String currency;
+
+  /// Nullable additive storage; older databases have no category limits.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  String? categoryLimitsJson;
+
+  Map<String, dynamic> _readCategoryLimits() =>
+      categoryLimitsJson == null || categoryLimitsJson!.isEmpty
+      ? {}
+      : jsonDecode(categoryLimitsJson!) as Map<String, dynamic>;
+
+  /// Percentage ceilings keyed by stable category UUID, also included in backups.
+  @Transient()
+  @JsonKey(defaultValue: <String, double>{})
+  Map<String, double> get categoryLimits {
+    return Map.fromEntries(
+      _readCategoryLimits().entries
+          .where((entry) => entry.value is num)
+          .map((entry) => MapEntry(entry.key, (entry.value as num).toDouble())),
+    );
+  }
+
+  set categoryLimits(Map<String, double> value) {
+    if (value.values.any((v) => !v.isFinite || v < 0 || v > 100)) {
+      throw ArgumentError("Category limits must be percentages from 0 to 100");
+    }
+    final map = _readCategoryLimits()..removeWhere((_, v) => v is num);
+    map.addAll(value);
+    categoryLimitsJson = map.isEmpty ? null : jsonEncode(map);
+  }
+
+  /// Fixed monetary ceilings in the budget currency; independent of its amount.
+  @Transient()
+  @JsonKey(defaultValue: <String, double>{})
+  Map<String, double> get categoryAmountLimits => Map.fromEntries(
+    _readCategoryLimits().entries
+        .where((entry) => entry.value is Map)
+        .map(
+          (entry) =>
+              MapEntry(entry.key, (entry.value["amount"] as num).toDouble()),
+        ),
+  );
+
+  set categoryAmountLimits(Map<String, double> value) {
+    if (value.values.any((v) => !v.isFinite || v < 0)) {
+      throw ArgumentError(
+        "Category amount limits must be finite and nonnegative",
+      );
+    }
+    final map = _readCategoryLimits()..removeWhere((_, v) => v is Map);
+    map.addAll(value.map((key, amount) => MapEntry(key, {"amount": amount})));
+    categoryLimitsJson = map.isEmpty ? null : jsonEncode(map);
+  }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   final categories = ToMany<Category>();

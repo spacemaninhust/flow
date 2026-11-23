@@ -84,60 +84,52 @@ void main() async {
       },
     );
 
-    test(
-      "Every account uuid + name + currency survives roundtrip",
-      () async {
-        final List<Account> originals = await ObjectBox()
-            .box<Account>()
-            .getAllAsync();
-        final SyncModelV2 parsed = SyncModelV2.fromJson(
-          jsonDecode(await generateBackupJSONContentV2())
-              as Map<String, dynamic>,
+    test("Every account uuid + name + currency survives roundtrip", () async {
+      final List<Account> originals = await ObjectBox()
+          .box<Account>()
+          .getAllAsync();
+      final SyncModelV2 parsed = SyncModelV2.fromJson(
+        jsonDecode(await generateBackupJSONContentV2()) as Map<String, dynamic>,
+      );
+
+      final Map<String, Account> byUuid = {
+        for (final a in parsed.accounts) a.uuid: a,
+      };
+
+      for (final original in originals) {
+        final Account? roundtripped = byUuid[original.uuid];
+        expect(
+          roundtripped,
+          isNotNull,
+          reason: "Account ${original.uuid} (${original.name}) lost",
         );
+        expect(roundtripped!.name, original.name);
+        expect(roundtripped.currency, original.currency);
+      }
+    });
 
-        final Map<String, Account> byUuid = {
-          for (final a in parsed.accounts) a.uuid: a,
-        };
+    test("Every category uuid + name survives roundtrip", () async {
+      final List<Category> originals = await ObjectBox()
+          .box<Category>()
+          .getAllAsync();
+      final SyncModelV2 parsed = SyncModelV2.fromJson(
+        jsonDecode(await generateBackupJSONContentV2()) as Map<String, dynamic>,
+      );
 
-        for (final original in originals) {
-          final Account? roundtripped = byUuid[original.uuid];
-          expect(
-            roundtripped,
-            isNotNull,
-            reason: "Account ${original.uuid} (${original.name}) lost",
-          );
-          expect(roundtripped!.name, original.name);
-          expect(roundtripped.currency, original.currency);
-        }
-      },
-    );
+      final Map<String, Category> byUuid = {
+        for (final c in parsed.categories) c.uuid: c,
+      };
 
-    test(
-      "Every category uuid + name survives roundtrip",
-      () async {
-        final List<Category> originals = await ObjectBox()
-            .box<Category>()
-            .getAllAsync();
-        final SyncModelV2 parsed = SyncModelV2.fromJson(
-          jsonDecode(await generateBackupJSONContentV2())
-              as Map<String, dynamic>,
+      for (final original in originals) {
+        final Category? roundtripped = byUuid[original.uuid];
+        expect(
+          roundtripped,
+          isNotNull,
+          reason: "Category ${original.uuid} (${original.name}) lost",
         );
-
-        final Map<String, Category> byUuid = {
-          for (final c in parsed.categories) c.uuid: c,
-        };
-
-        for (final original in originals) {
-          final Category? roundtripped = byUuid[original.uuid];
-          expect(
-            roundtripped,
-            isNotNull,
-            reason: "Category ${original.uuid} (${original.name}) lost",
-          );
-          expect(roundtripped!.name, original.name);
-        }
-      },
-    );
+        expect(roundtripped!.name, original.name);
+      }
+    });
 
     test(
       "Every transaction uuid + amount + currency + date survives roundtrip",
@@ -173,43 +165,78 @@ void main() async {
       },
     );
 
-    test(
-      "Every budget field + category links survive roundtrip",
-      () async {
-        final Category category = ObjectBox().box<Category>().getAll().first;
+    test("Every budget field + category links survive roundtrip", () async {
+      final Category category = ObjectBox().box<Category>().getAll().first;
 
-        final Budget original = Budget(
-          name: "Roundtrip budget",
-          amount: 500.0,
-          currency: "USD",
-          range: MonthTimeRange.fromDateTime(DateTime.now()).toString(),
-        )..setCategories([category]);
+      final Budget original =
+          Budget(
+              name: "Roundtrip budget",
+              amount: 500.0,
+              currency: "USD",
+              range: MonthTimeRange.fromDateTime(DateTime.now()).toString(),
+            )
+            ..setCategories([category])
+            ..categoryLimits = {category.uuid: 30.5};
 
-        ObjectBox().box<Budget>().put(original);
+      ObjectBox().box<Budget>().put(original);
 
-        final SyncModelV2 parsed = SyncModelV2.fromJson(
-          jsonDecode(await generateBackupJSONContentV2())
-              as Map<String, dynamic>,
-        );
+      final SyncModelV2 parsed = SyncModelV2.fromJson(
+        jsonDecode(await generateBackupJSONContentV2()) as Map<String, dynamic>,
+      );
 
-        expect(parsed.budgets, isNotNull);
-        final Budget? roundtripped = parsed.budgets!
-            .where((budget) => budget.uuid == original.uuid)
-            .firstOrNull;
+      expect(parsed.budgets, isNotNull);
+      final Budget? roundtripped = parsed.budgets!
+          .where((budget) => budget.uuid == original.uuid)
+          .firstOrNull;
 
-        expect(
-          roundtripped,
-          isNotNull,
-          reason: "Budget ${original.uuid} (${original.name}) lost",
-        );
-        expect(roundtripped!.name, original.name);
-        expect(roundtripped.amount, original.amount);
-        expect(roundtripped.currency, original.currency);
-        expect(roundtripped.range, original.range);
-        expect(roundtripped.renewAutomatically, original.renewAutomatically);
-        expect(roundtripped.categoriesUuids, [category.uuid]);
-      },
-    );
+      expect(
+        roundtripped,
+        isNotNull,
+        reason: "Budget ${original.uuid} (${original.name}) lost",
+      );
+      expect(roundtripped!.name, original.name);
+      expect(roundtripped.amount, original.amount);
+      expect(roundtripped.currency, original.currency);
+      expect(roundtripped.range, original.range);
+      expect(roundtripped.renewAutomatically, original.renewAutomatically);
+      expect(roundtripped.categoriesUuids, [category.uuid]);
+      expect(roundtripped.categoryLimits, {category.uuid: 30.5});
+      final stored = ObjectBox().box<Budget>().get(original.id)!;
+      expect(stored.categoryLimits, {category.uuid: 30.5});
+      final legacy = Map<String, dynamic>.of(original.toJson())
+        ..remove("categoryLimits");
+      expect(Budget.fromJson(legacy).categoryLimits, isEmpty);
+      expect(
+        () => stored.categoryLimits = {category.uuid: 101},
+        throwsArgumentError,
+      );
+      expect(
+        () => stored.categoryLimits = {category.uuid: double.nan},
+        throwsArgumentError,
+      );
+      original.categoryAmountLimits = {category.uuid: 125.75};
+      ObjectBox().box<Budget>().put(original);
+      final fixedBackup = SyncModelV2.fromJson(
+        jsonDecode(await generateBackupJSONContentV2()) as Map<String, dynamic>,
+      ).budgets!.singleWhere((b) => b.uuid == original.uuid);
+      expect(fixedBackup.categoryLimits, isEmpty);
+      expect(fixedBackup.categoryAmountLimits, {category.uuid: 125.75});
+      expect(ObjectBox().box<Budget>().get(original.id)!.categoryAmountLimits, {
+        category.uuid: 125.75,
+      });
+      expect(
+        () => stored.categoryAmountLimits = {category.uuid: -1},
+        throwsArgumentError,
+      );
+      expect(
+        () => stored.categoryAmountLimits = {category.uuid: double.infinity},
+        throwsArgumentError,
+      );
+      final oldBackup = Map<String, dynamic>.of(original.toJson())
+        ..remove("categoryLimits")
+        ..remove("categoryAmountLimits");
+      expect(Budget.fromJson(oldBackup).categoryAmountLimits, isEmpty);
+    });
 
     test("Backups without budgets parse with null budgets", () {
       final SyncModelV2 parsed = SyncModelV2.fromJson({

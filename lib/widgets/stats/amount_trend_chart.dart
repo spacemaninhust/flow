@@ -3,6 +3,7 @@ import "dart:math" as math;
 import "package:fl_chart/fl_chart.dart";
 import "package:flow/data/amount_trend.dart";
 import "package:flow/data/money.dart";
+import "package:flow/data/trend_axis_labels.dart";
 import "package:flow/l10n/extensions.dart";
 import "package:flow/widgets/general/money_text.dart";
 import "package:flow/widgets/stats/exact_amount_text.dart";
@@ -61,7 +62,11 @@ class _AmountTrendChartState extends State<AmountTrendChart> {
     final double low = values.reduce(math.min);
     final double high = values.reduce(math.max);
     final double pad = high == low ? high.abs() * .1 + 1 : (high - low) * .15;
-    final int labelStep = math.max(1, (values.length / 4).floor());
+    final Map<double, Set<int>> axisLabels = {};
+    String axisLabel(int i) => widget.points[i].date.toMoment().format(
+      widget.monthly ? "MMM" : "MMM D",
+    );
+    final labelStyle = Theme.of(context).textTheme.labelSmall;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,18 +146,36 @@ class _AmountTrendChartState extends State<AmountTrendChart> {
                       if (value != i.toDouble() ||
                           i < 0 ||
                           i >= values.length ||
-                          (i % labelStep != 0 && i != values.length - 1)) {
+                          !axisLabels
+                              .putIfAbsent(
+                                meta.parentAxisSize,
+                                () => trendAxisLabels(
+                                  count: values.length,
+                                  width: meta.parentAxisSize,
+                                  labelWidth: (index) {
+                                    final painter = TextPainter(
+                                      text: TextSpan(
+                                        text: axisLabel(index),
+                                        style: labelStyle,
+                                      ),
+                                      textDirection: Directionality.of(context),
+                                      textScaler: MediaQuery.textScalerOf(
+                                        context,
+                                      ),
+                                    )..layout();
+                                    final width = painter.width;
+                                    painter.dispose();
+                                    return width;
+                                  },
+                                ),
+                              )
+                              .contains(i)) {
                         return const SizedBox.shrink();
                       }
                       return SideTitleWidget(
                         meta: meta,
                         fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
-                        child: Text(
-                          widget.points[i].date.toMoment().format(
-                            widget.monthly ? "MMM" : "MMM D",
-                          ),
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
+                        child: Text(axisLabel(i), style: labelStyle),
                       );
                     },
                   ),
